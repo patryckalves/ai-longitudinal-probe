@@ -119,8 +119,8 @@ jobs:
             mkdir -p manifests
             cp -R _collected/manifests/* manifests/
           fi
-          git config user.name  "ai-longitudinal-probe bot"
-          git config user.email "bot@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifests
           if git diff --cached --quiet; then
             echo "nothing to commit"
