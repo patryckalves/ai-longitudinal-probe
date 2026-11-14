@@ -1,0 +1,32 @@
+[project]
+name = "ai-longitudinal-probe"
+version = "1.0.0"
+description = "Coletor do Observatório Longitudinal de Modelos de IA em Produção"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic>=2.5,<3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# py3.9: manter typing clássico
+ignore = ["UP006", "UP007", "UP035", "UP045"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

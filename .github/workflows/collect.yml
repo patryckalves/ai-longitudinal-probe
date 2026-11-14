@@ -1,0 +1,129 @@
+name: collect
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  PROBE_DRAWS: "5"
+  PROBE_LIMIT_CALLS: "400"
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: openrouter
+            base_url: "https://openrouter.ai/api/v1"
+            models: ""
+            api_key_secret: OPENROUTER_API_KEY
+          - name: gemini
+            base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
+            models: "gemini-3.5-flash-lite"
+            api_key_secret: GEMINI_API_KEY
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Collect (5 draws per cell)
+        env:
+          PROBE_API_KEY: ${{ secrets[matrix.api_key_secret] }}
+          PROBE_BASE_URL: ${{ matrix.base_url }}
+          PROBE_MODELS: ${{ matrix.models }}
+        run: |
+          DAY=$(date -u -d '-3 hours' +%F)
+          if [ -z "${PROBE_API_KEY}" ]; then
+            echo "::notice::skipping ${{ matrix.name }} — ${{ matrix.api_key_secret }} secret not configured"
+            exit 0
+          fi
+          export PROBE_OUT="data/${DAY}-${{ matrix.name }}.jsonl"
+          export PROBE_MANIFEST_DIR="manifests/${{ matrix.name }}"
+          uv run python3 scripts/collect.py
+
+      - name: Validate the day's artifact
+        run: |
+          DAY=$(date -u -d '-3 hours' +%F)
+          OUT="data/${DAY}-${{ matrix.name }}.jsonl"
+          MANIFEST="manifests/${{ matrix.name }}/${DAY}.json"
+          if [ -f "$OUT" ]; then
+            uv run python3 scripts/validate.py --file "$OUT" --manifest "$MANIFEST"
+          fi
+
+      - name: Archive job artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ github.run_id }}-${{ matrix.name }}
+          path: |
+            data/*.jsonl
+            manifests/${{ matrix.name }}/*.json
+          retention-days: 90
+          if-no-files-found: warn
+
+  publish:
+    needs: [collect]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      BUCKET_API_KEY: ${{ secrets.BUCKET_API_KEY }}
+      BUCKET_ACCOUNT_ID: ${{ secrets.BUCKET_ACCOUNT_ID }}
+      BUCKET_NAME: ${{ vars.BUCKET_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download collected artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: probe-${{ github.run_id }}-*
+          merge-multiple: true
+          path: _collected
+
+      - name: Publish raw artifacts to R2 (if configured)
+        if: env.BUCKET_API_KEY != '' && env.BUCKET_ACCOUNT_ID != '' && env.BUCKET_NAME != ''
+        run: |
+          if [ -d _collected/data ]; then
+            for f in _collected/data/*.jsonl; do
+              [ -f "$f" ] || continue
+              key="raw/$(basename "$f")"
+              echo "uploading $key"
+              curl --fail-with-body -sS -X PUT \
+                "https://api.cloudflare.com/client/v4/accounts/${BUCKET_ACCOUNT_ID}/r2/buckets/${BUCKET_NAME}/objects/${key}" \
+                -H "Authorization: Bearer ${BUCKET_API_KEY}" \
+                -H "Content-Type: application/x-ndjson" \
+                --data-binary @"$f"
+              echo ""
+            done
+          fi
+
+      - name: Commit manifests
+        run: |
+          if [ -d _collected/manifests ]; then
+            mkdir -p manifests
+            cp -R _collected/manifests/* manifests/
+          fi
+          git config user.name  "ai-longitudinal-probe bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add manifests
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "collect $(date -u -d '-3 hours' +%F): manifests"
+            git push
+          fi
