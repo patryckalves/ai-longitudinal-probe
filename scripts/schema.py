@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import pathlib
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import (
@@ -30,7 +30,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CANARY_PREFIX = "canario-"
 
 
-class Block(str, Enum):
+class Block(StrEnum):
     """Section of the battery.
 
     Attributes:
@@ -46,7 +46,7 @@ class Block(str, Enum):
     CANARY = "K"
 
 
-class Outcome(str, Enum):
+class Outcome(StrEnum):
     """How a call ended.
 
     Attributes:

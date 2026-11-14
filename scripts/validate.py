@@ -22,7 +22,7 @@ import os
 import pathlib
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Dict, List, Optional
 
 from pydantic import ValidationError
@@ -40,7 +40,7 @@ def today_brt() -> str:
     Returns:
         The current date in Brasília time.
     """
-    return (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%d")
+    return (datetime.now(UTC) - timedelta(hours=3)).strftime("%Y-%m-%d")
 
 
 class Report:

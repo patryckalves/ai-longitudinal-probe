@@ -40,7 +40,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 
 from schema import Manifest, Outcome, Question, Record, load_questions
@@ -86,7 +86,7 @@ def today_brt() -> str:
     Returns:
         The current date in Brasília time.
     """
-    return (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%d")
+    return (datetime.now(UTC) - timedelta(hours=3)).strftime("%Y-%m-%d")
 
 
 def _keychain_lookup(service: str) -> Optional[str]:
@@ -359,7 +359,7 @@ def build_record(
         "id": str(uuid.uuid4()),
         "run_id": run_id,
         "day": run_id,
-        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "collected_at": datetime.now(UTC).isoformat(),
         "question_slug": question.slug,
         "question_text": question.text,
         "instrument_version": question.version,
@@ -454,7 +454,7 @@ def write_manifest(
     manifest = {
         "run_id": run_id,
         "instrument_version": questions[0].version,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "roster": models,
         "draws": DRAWS,
         "questions": len(questions),
