@@ -1,7 +1,7 @@
 {
   "run_id": "2026-11-14",
   "instrument_version": "v1.0.0",
-  "generated_at": "2026-11-14T04:25:54.792217+00:00",
+  "generated_at": "2026-11-14T16:08:23.642923+00:00",
   "roster": [
     "baidu/ernie-5.5-flash-preview:free",
     "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -16,15 +16,14 @@
   "target_today": 380,
   "coverage": 1.0,
   "outcomes_this_run": {
-    "answered": 364,
-    "truncated": 15,
-    "not_evaluated": 1
+    "answered": 379,
+    "truncated": 1
   },
   "calls": 380,
-  "duration_s": 2787,
-  "actions_minutes": 46.5,
-  "bytes_written": 581342,
-  "file_sha256": "3954681caad3da8535915167d6be24175b5a5b94c3c0c6e74a29dde352650063",
+  "duration_s": 3901,
+  "actions_minutes": 65.0,
+  "bytes_written": 835311,
+  "file_sha256": "82a41e72f378475801ffe7eea9815b0ff815022b88eb7eda5ee0a535e8dd14ce",
   "cost_usd": 0.0,
   "file": "2026-11-14.json"
 }
