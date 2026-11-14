@@ -55,7 +55,7 @@ ENDPOINT = f"{BASE_URL}/chat/completions"
 ROUTE = urllib.parse.urlparse(BASE_URL).netloc or BASE_URL
 
 DRAWS = int(os.environ.get("PROBE_DRAWS", "5"))
-MAX_TOKENS = 1500
+MAX_TOKENS = 3000
 PACING_S = 3.2
 HARD_TIMEOUT_S = 120
 RETRIES = 2
