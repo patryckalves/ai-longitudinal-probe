@@ -40,8 +40,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from collections import deque
 from datetime import UTC, datetime, timedelta
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Deque, Dict, List, Optional, Set, Tuple
 
 from schema import Manifest, Outcome, Question, Record, load_questions
 
@@ -60,6 +61,8 @@ PACING_S = 3.2
 HARD_TIMEOUT_S = 120
 RETRIES = 2
 RETRY_BACKOFF_S = (20, 40)
+BREAKER_WINDOW = 6
+BREAKER_THRESHOLD = 5
 
 ROSTER = [
     "baidu/ernie-5.5-flash-preview:free",
@@ -75,9 +78,48 @@ class _Timeout(Exception):
     """Raised by the wall-clock alarm when a call overruns ``HARD_TIMEOUT_S``."""
 
 
+class _StopRequested(BaseException):
+    """Raised when SIGTERM or SIGINT asks the collector to stop cleanly."""
+
+
 def _alarm(signum, frame) -> None:
     """Signal handler that turns the alarm into an exception."""
     raise _Timeout()
+
+
+def _stop_signal(signum, frame) -> None:
+    """Signal handler that interrupts the loop so the manifest is still written."""
+    raise _StopRequested()
+
+
+def _is_breaker_failure(result: dict) -> bool:
+    """Return whether a call result counts toward tripping the circuit breaker.
+
+    Args:
+        result: Payload returned by :func:`call_model`.
+
+    Returns:
+        ``True`` for provider unavailability (429/5xx) or hard wall-clock timeouts.
+    """
+    error = str(result.get("error_type") or "")
+    return (
+        result.get("outcome") == Outcome.UNAVAILABLE
+        or error.startswith("hard_timeout_")
+    )
+
+
+def update_breaker(history: Deque[int], result: dict) -> bool:
+    """Update a model's sliding failure window and check if the breaker trips.
+
+    Args:
+        history: Bounded deque of recent call failure indicators (1 or 0).
+        result: Payload returned by :func:`call_model`.
+
+    Returns:
+        ``True`` when the moving window has at least ``BREAKER_THRESHOLD`` failures.
+    """
+    history.append(1 if _is_breaker_failure(result) else 0)
+    return sum(history) >= BREAKER_THRESHOLD
 
 
 def today_brt() -> str:
@@ -528,69 +570,103 @@ def main() -> int:
     count = 0
     stop = False
     outcomes: Dict[str, int] = {}
+    breaker_history: Dict[str, Deque[int]] = {
+        model: deque(maxlen=BREAKER_WINDOW) for model in models
+    }
+    tripped: Set[str] = set()
 
-    with out.open("a", encoding="utf-8") as handle:
-        for draw in range(1, DRAWS + 1):
-            if stop:
-                break
-            for question in questions:
+    prev_sigterm = signal.getsignal(signal.SIGTERM)
+    prev_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGTERM, _stop_signal)
+    signal.signal(signal.SIGINT, _stop_signal)
+
+    try:
+        with out.open("a", encoding="utf-8") as handle:
+            for draw in range(1, DRAWS + 1):
                 if stop:
                     break
-                for model in models:
-                    if (run_id, question.slug, model, draw) in done:
-                        continue
-                    if len(done) + count >= limit:
-                        print("call ceiling reached (PROBE_LIMIT_CALLS)", flush=True)
-                        stop = True
+                for question in questions:
+                    if stop:
                         break
-                    result = call_model(key, model, question.text)
-                    record = build_record(
-                        run_id=run_id,
-                        question=question,
-                        model=model,
-                        draw=draw,
-                        result=result,
-                    )
-                    handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-                    handle.flush()
-                    count += 1
-                    outcomes[record["outcome"]] = outcomes.get(record["outcome"], 0) + 1
-                    flag = ""
-                    if record["outcome"] != Outcome.ANSWERED.value:
-                        flag = f"  !! {record['outcome']} {str(record['error_type'])[:80]}"
-                    print(
-                        f"[{count:>3}] {model:<44} {question.slug:<24} d{draw} "
-                        f"{record['latency_ms']:>6}ms "
-                        f"{record['tokens'].get('out') or 0:>4}tok{flag}",
-                        flush=True,
-                    )
-                    time.sleep(PACING_S)
-
-    elapsed = time.time() - started
-    total = len(done) + count
-    bytes_written, file_sha256, total_cost = _summarize_run_file(out)
-    manifest_path = manifest_dir / f"{run_id}.json"
-    write_manifest(
-        manifest_path,
-        run_id=run_id,
-        questions=questions,
-        models=models,
-        count=count,
-        total=total,
-        target=target,
-        elapsed=elapsed,
-        bytes_written=bytes_written,
-        file_sha256=file_sha256,
-        cost_usd=total_cost,
-        outcomes=outcomes,
-        canaries_included=not skip_canaries,
-    )
-    print(
-        f"\n{count} new · {total}/{target} today · {elapsed/60:.1f} min · "
-        f"{bytes_written} bytes · {outcomes}",
-        flush=True,
-    )
-    print(f"manifest -> {manifest_path}", flush=True)
+                    for model in models:
+                        if (run_id, question.slug, model, draw) in done:
+                            continue
+                        if model in tripped:
+                            result = _empty_result(
+                                Outcome.UNAVAILABLE, "circuit_breaker_open", None, 0
+                            )
+                        else:
+                            if len(done) + count >= limit:
+                                print("call ceiling reached (PROBE_LIMIT_CALLS)", flush=True)
+                                stop = True
+                                break
+                            result = call_model(key, model, question.text)
+                            if update_breaker(breaker_history[model], result):
+                                tripped.add(model)
+                                print(
+                                    f"circuit breaker opened for {model} "
+                                    f"({sum(breaker_history[model])}/"
+                                    f"{len(breaker_history[model])} recent failures)",
+                                    flush=True,
+                                )
+                        record = build_record(
+                            run_id=run_id,
+                            question=question,
+                            model=model,
+                            draw=draw,
+                            result=result,
+                        )
+                        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                        handle.flush()
+                        count += 1
+                        outcomes[record["outcome"]] = (
+                            outcomes.get(record["outcome"], 0) + 1
+                        )
+                        flag = ""
+                        if record["outcome"] != Outcome.ANSWERED.value:
+                            flag = (
+                                f"  !! {record['outcome']} "
+                                f"{str(record['error_type'])[:80]}"
+                            )
+                        print(
+                            f"[{count:>3}] {model:<44} {question.slug:<24} d{draw} "
+                            f"{record['latency_ms']:>6}ms "
+                            f"{record['tokens'].get('out') or 0:>4}tok{flag}",
+                            flush=True,
+                        )
+                        if result.get("error_type") != "circuit_breaker_open":
+                            time.sleep(PACING_S)
+    except _StopRequested:
+        print("stop signal received — writing manifest before exit", flush=True)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGTERM, prev_sigterm)
+        signal.signal(signal.SIGINT, prev_sigint)
+        elapsed = time.time() - started
+        total = len(done) + count
+        bytes_written, file_sha256, total_cost = _summarize_run_file(out)
+        manifest_path = manifest_dir / f"{run_id}.json"
+        write_manifest(
+            manifest_path,
+            run_id=run_id,
+            questions=questions,
+            models=models,
+            count=count,
+            total=total,
+            target=target,
+            elapsed=elapsed,
+            bytes_written=bytes_written,
+            file_sha256=file_sha256,
+            cost_usd=total_cost,
+            outcomes=outcomes,
+            canaries_included=not skip_canaries,
+        )
+        print(
+            f"\n{count} new · {total}/{target} today · {elapsed/60:.1f} min · "
+            f"{bytes_written} bytes · {outcomes}",
+            flush=True,
+        )
+        print(f"manifest -> {manifest_path}", flush=True)
     return 0
 
 

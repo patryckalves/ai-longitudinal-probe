@@ -55,13 +55,13 @@ def canary(slug="canario-aritmetica", model=MODEL, draw=1, answer_text="42", **o
 
 
 def unavailable(**over) -> dict:
-    text = over.pop("answer_text", "")
-    return record(
-        answer_text=text,
-        outcome="unavailable",
-        http_status=429,
-        finish_reason=None,
-        tokens={"in": None, "out": None, "reasoning": None},
-        error_type="http_429: rate limited",
-        **over,
-    )
+    defaults = {
+        "answer_text": "",
+        "outcome": "unavailable",
+        "http_status": 429,
+        "finish_reason": None,
+        "tokens": {"in": None, "out": None, "reasoning": None},
+        "error_type": "http_429: rate limited",
+    }
+    defaults.update(over)
+    return record(**defaults)

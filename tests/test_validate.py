@@ -117,3 +117,14 @@ def test_missing_file_fails(tmp_path):
     result = run(tmp_path / "does-not-exist.jsonl")
     assert result.returncode == 1
     assert "file not found" in result.stdout
+
+
+def test_circuit_breaker_warns_without_failing(tmp_path):
+    records = [
+        record(draw=1),
+        canary(draw=1),
+        unavailable(draw=2, http_status=None, error_type="circuit_breaker_open"),
+    ]
+    result = run(write(tmp_path, records))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "circuit breaker opened" in result.stdout

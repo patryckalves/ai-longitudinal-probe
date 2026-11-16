@@ -4,6 +4,7 @@ import io
 import json
 import subprocess
 import urllib.error
+from collections import deque
 
 import collect
 import pytest
@@ -238,3 +239,112 @@ def test_summarize_run_file_and_write_manifest(tmp_path):
     )
     assert manifest["cost_usd"] == 0.004
     assert manifest["file_sha256"] == sha
+
+
+def test_update_breaker_trips_on_five_of_six_failures():
+    history = deque(maxlen=collect.BREAKER_WINDOW)
+    timeout_res = collect._empty_result(Outcome.NOT_EVALUATED, "hard_timeout_120s", None, 120000)
+    unavail_res = collect._empty_result(Outcome.UNAVAILABLE, "http_503: overloaded", 503, 1000)
+    ok_res = _result()
+
+    for _ in range(4):
+        assert not collect.update_breaker(history, timeout_res)
+    assert not collect.update_breaker(history, ok_res)
+    assert collect.update_breaker(history, unavail_res)
+
+
+def test_main_circuit_breaker_isolates_failing_model(tmp_path, monkeypatch):
+    q_file = tmp_path / "questions.jsonl"
+    questions = [
+        Question(
+            slug=f"q-{i}",
+            block="F",
+            version="v1.0.0",
+            active_since="2026-11-13",
+            text=f"Pergunta {i}?",
+        )
+        for i in range(1, 4)
+    ]
+    q_file.write_text(
+        "\n".join(q.model_dump_json() for q in questions) + "\n", encoding="utf-8"
+    )
+    out_file = tmp_path / "data" / "2026-11-15.jsonl"
+    manifest_dir = tmp_path / "manifests"
+
+    monkeypatch.setenv("PROBE_API_KEY", "test-key")
+    monkeypatch.setenv("PROBE_RUN_DATE", "2026-11-15")
+    monkeypatch.setenv("PROBE_OUT", str(out_file))
+    monkeypatch.setenv("PROBE_MANIFEST_DIR", str(manifest_dir))
+    monkeypatch.setenv("PROBE_MODELS", "vendor/good:free,vendor/bad:free")
+    monkeypatch.setattr(collect, "QUESTIONS", q_file)
+    monkeypatch.setattr(collect, "DRAWS", 3)
+    monkeypatch.setattr(collect.time, "sleep", lambda s: None)
+
+    calls = {"good": 0, "bad": 0}
+
+    def fake_call(key, model, text):
+        if model == "vendor/bad:free":
+            calls["bad"] += 1
+            return collect._empty_result(
+                Outcome.NOT_EVALUATED, "hard_timeout_120s", None, 120000
+            )
+        calls["good"] += 1
+        return _result(
+            text="Resposta válida.",
+            outcome=Outcome.ANSWERED,
+            http=200,
+            finish="stop",
+        )
+
+    monkeypatch.setattr(collect, "call_model", fake_call)
+    assert collect.main() == 0
+
+    assert calls["good"] == 9
+    assert calls["bad"] == 5
+
+    records = [json.loads(line) for line in out_file.read_text(encoding="utf-8").splitlines()]
+    assert len(records) == 18
+    skipped = [r for r in records if r["error_type"] == "circuit_breaker_open"]
+    assert len(skipped) == 4
+    assert all(
+        r["model_id"] == "vendor/bad:free" and r["outcome"] == "unavailable"
+        for r in skipped
+    )
+
+    manifest = json.loads((manifest_dir / "2026-11-15.json").read_text(encoding="utf-8"))
+    assert manifest["records_today"] == 18
+    assert manifest["coverage"] == 1.0
+
+
+def test_main_writes_manifest_on_stop_signal(tmp_path, monkeypatch):
+    q_file = tmp_path / "questions.jsonl"
+    q_file.write_text(QUESTION.model_dump_json() + "\n", encoding="utf-8")
+    out_file = tmp_path / "data" / "2026-11-15.jsonl"
+    manifest_dir = tmp_path / "manifests"
+
+    monkeypatch.setenv("PROBE_API_KEY", "test-key")
+    monkeypatch.setenv("PROBE_RUN_DATE", "2026-11-15")
+    monkeypatch.setenv("PROBE_OUT", str(out_file))
+    monkeypatch.setenv("PROBE_MANIFEST_DIR", str(manifest_dir))
+    monkeypatch.setenv("PROBE_MODELS", "vendor/model-a:free")
+    monkeypatch.setattr(collect, "QUESTIONS", q_file)
+    monkeypatch.setattr(collect, "DRAWS", 3)
+    monkeypatch.setattr(collect.time, "sleep", lambda s: None)
+
+    calls = {"n": 0}
+
+    def interrupted_call(key, model, text):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise collect._StopRequested()
+        return _result()
+
+    monkeypatch.setattr(collect, "call_model", interrupted_call)
+    assert collect.main() == 0
+
+    manifest_path = manifest_dir / "2026-11-15.json"
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["records_today"] == 1
+    assert manifest["target_today"] == 3
+    assert manifest["coverage"] == 0.333

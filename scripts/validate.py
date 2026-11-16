@@ -246,6 +246,25 @@ def _check_truncation(records: List[Record], report: Report, max_truncation: flo
             )
 
 
+def _check_circuit_breaker(records: List[Record], report: Report) -> None:
+    """Warn about models that tripped the availability circuit breaker.
+
+    Args:
+        records: Validated records.
+        report: Report that receives one warning per affected model.
+    """
+    by_model: Dict[str, List[Record]] = defaultdict(list)
+    for record in records:
+        by_model[record.model_id].append(record)
+    for model, rows in sorted(by_model.items()):
+        skipped = sum(1 for row in rows if row.error_type == "circuit_breaker_open")
+        if skipped:
+            report.warn(
+                f"{model}: circuit breaker opened ({skipped}/{len(rows)} cell(s) "
+                f"marked unavailable)"
+            )
+
+
 def _check_cache(records: List[Record], report: Report) -> None:
     """Warn when every draw of a cell returned a byte-identical answer.
 
@@ -385,6 +404,7 @@ def run_checks(
     _check_outcomes(records, report)
     _check_matrix_gaps(records, questions, report)
     _check_truncation(records, report, max_truncation)
+    _check_circuit_breaker(records, report)
     _check_cache(records, report)
     _check_canaries(records, questions, report)
     _check_coverage(records, manifest, report, min_coverage)
