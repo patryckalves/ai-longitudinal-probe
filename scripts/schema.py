@@ -71,6 +71,7 @@ class Tokens(BaseModel):
         tokens_in: Prompt tokens, serialised as ``in``.
         tokens_out: Completion tokens, serialised as ``out``.
         reasoning: Thinking tokens, when the provider reports them.
+        cached: Prompt tokens served from cache, when the provider reports them.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -78,6 +79,7 @@ class Tokens(BaseModel):
     tokens_in: Optional[int] = Field(default=None, alias="in")
     tokens_out: Optional[int] = Field(default=None, alias="out")
     reasoning: Optional[int] = None
+    cached: Optional[int] = None
 
 
 class Params(BaseModel):
@@ -121,6 +123,7 @@ class Record(BaseModel):
         answer_text: The answer, verbatim.
         answer_chars: Length of ``answer_text``.
         answer_sha256: Short digest, to spot byte-identical answers.
+        reasoning_text: Thinking text, when the provider returns it in plaintext.
         outcome: How the call ended.
         error_type: Detail when the outcome is not ``answered``.
         http_status: HTTP status, when there was one.
@@ -153,6 +156,7 @@ class Record(BaseModel):
     answer_text: str
     answer_chars: int = Field(ge=0)
     answer_sha256: str
+    reasoning_text: Optional[str] = None
     outcome: Outcome
     error_type: Optional[str] = None
     http_status: Optional[int] = None

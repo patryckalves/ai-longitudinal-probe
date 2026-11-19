@@ -124,7 +124,7 @@ uv run ruff check scripts tests && uv run pytest -q
 
 ## GitHub Actions
 
-`collect.yml` roda no cron das 05:17 BRT em matriz paralela por provedor (`openrouter` com `secrets.OPENROUTER_API_KEY` e `gemini` com `secrets.GEMINI_API_KEY`), valida cada artefato com `validate.py` e publica os `.jsonl` brutos no Cloudflare R2 (via `secrets.BUCKET_API_KEY`, `secrets.BUCKET_ACCOUNT_ID` e `vars.BUCKET_NAME`), comitando os manifestos (com `file_sha256`) em `manifests/`. `ci.yml` roda lint e testes em push e PR.
+`collect.yml` roda no cron das 05:17 BRT em matriz paralela por provedor (`openrouter` com `secrets.OPENROUTER_API_KEY`, `gemini` com `secrets.GEMINI_API_KEY` e `maritaca` com `secrets.MARITACA_API_KEY` rodando `S5-nano`), valida cada artefato com `validate.py` e publica os `.jsonl` brutos no Cloudflare R2 (via `secrets.BUCKET_API_KEY`, `secrets.BUCKET_ACCOUNT_ID` e `vars.BUCKET_NAME`), comitando os manifestos (com `file_sha256`) em `manifests/`. `ci.yml` roda lint e testes em push e PR.
 
 Repositório público sem atividade por 60 dias tem o agendamento desativado. O commit diário do manifesto
 é o que mantém o cron vivo.

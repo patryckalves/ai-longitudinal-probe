@@ -160,8 +160,22 @@ def test_call_model_captures_provenance_fields(monkeypatch):
             "model": "vendor/model-a-20261101",
             "provider": "Vendor",
             "system_fingerprint": "fp_abc123",
-            "choices": [{"message": {"content": "Onze."}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.0025},
+            "choices": [
+                {
+                    "message": {
+                        "content": "Onze.",
+                        "reasoning_content": "  STF tem 11 ministros.  ",
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "prompt_tokens_details": {"cached_tokens": 4},
+                "completion_tokens_details": {"reasoning_tokens": 3},
+                "cost": 0.0025,
+            },
         },
     )
     res = collect.call_model("k", "vendor/model-a", "Quantos?")
@@ -169,6 +183,49 @@ def test_call_model_captures_provenance_fields(monkeypatch):
     assert res["generation_id"] == "gen-123"
     assert res["system_fingerprint"] == "fp_abc123"
     assert res["cost_usd"] == 0.0025
+    assert res["reasoning_text"] == "STF tem 11 ministros."
+    assert res["tokens"] == {"in": 10, "out": 5, "reasoning": 3, "cached": 4}
+
+    built = collect.build_record(
+        run_id="2026-11-19", question=QUESTION, model="S5-nano", draw=1, result=res
+    )
+    assert built["reasoning_text"] == "STF tem 11 ministros."
+    assert built["tokens"]["cached"] == 4
+
+
+def test_call_model_falls_back_to_reasoning_field_and_ignores_blank(monkeypatch):
+    monkeypatch.setattr(
+        collect,
+        "_post",
+        lambda key, model, text: {
+            "choices": [
+                {
+                    "message": {"content": "42", "reasoning": "passo a passo"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+        },
+    )
+    res = collect.call_model("k", "m", "17+25?")
+    assert res["reasoning_text"] == "passo a passo"
+    assert res["tokens"]["cached"] is None
+
+    monkeypatch.setattr(
+        collect,
+        "_post",
+        lambda key, model, text: {
+            "choices": [
+                {
+                    "message": {"content": "42", "reasoning_content": "   "},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+        },
+    )
+    blank = collect.call_model("k", "m", "17+25?")
+    assert blank["reasoning_text"] is None
 
 
 def test_call_model_retries_429_and_recovers(monkeypatch):

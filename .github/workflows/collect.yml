@@ -32,6 +32,10 @@ jobs:
             base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
             models: "gemini-3.5-flash-lite"
             api_key_secret: GEMINI_API_KEY
+          - name: maritaca
+            base_url: "https://chat.maritaca.ai/api"
+            models: "S5-nano"
+            api_key_secret: MARITACA_API_KEY
     steps:
       - uses: actions/checkout@v4
 

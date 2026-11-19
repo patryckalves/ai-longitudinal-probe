@@ -15,7 +15,20 @@ def test_tokens_use_in_out_aliases():
     r = Record(**record())
     assert r.tokens.tokens_in == 30
     assert r.tokens.tokens_out == 40
+    assert r.tokens.cached is None
+    assert r.reasoning_text is None
     assert r.model_dump(by_alias=True)["tokens"]["out"] == 40
+
+
+def test_record_accepts_cached_tokens_and_reasoning_text():
+    r = Record(
+        **record(
+            tokens={"in": 18, "out": 27, "reasoning": 22, "cached": 10},
+            reasoning_text="17+25=42.",
+        )
+    )
+    assert r.tokens.cached == 10
+    assert r.reasoning_text == "17+25=42."
 
 
 def test_extra_field_fails_loud():

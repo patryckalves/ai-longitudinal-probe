@@ -292,11 +292,12 @@ def _empty_result(
     """
     return {
         "answer_text": "",
+        "reasoning_text": None,
         "outcome": outcome,
         "error_type": error_type,
         "http_status": http_status,
         "latency_ms": latency_ms,
-        "tokens": {"in": None, "out": None, "reasoning": None},
+        "tokens": {"in": None, "out": None, "reasoning": None, "cached": None},
         "cost_usd": 0.0,
         "declared_version": None,
         "provider": None,
@@ -329,11 +330,19 @@ def call_model(key: str, model: str, text: str) -> dict:
             choice = (body.get("choices") or [{}])[0]
             message = choice.get("message") or {}
             answer = (message.get("content") or "").strip()
+            reasoning_raw = message.get("reasoning_content") or message.get("reasoning")
+            reasoning_text = (
+                reasoning_raw.strip()
+                if isinstance(reasoning_raw, str) and reasoning_raw.strip()
+                else None
+            )
             finish = choice.get("finish_reason")
             usage = body.get("usage") or {}
+            prompt_details = usage.get("prompt_tokens_details") or {}
             details = usage.get("completion_tokens_details") or {}
             return {
                 "answer_text": answer,
+                "reasoning_text": reasoning_text,
                 "outcome": classify_outcome(finish, answer),
                 "error_type": None if answer else "empty_response",
                 "http_status": 200,
@@ -342,6 +351,7 @@ def call_model(key: str, model: str, text: str) -> dict:
                     "in": usage.get("prompt_tokens"),
                     "out": usage.get("completion_tokens"),
                     "reasoning": details.get("reasoning_tokens"),
+                    "cached": prompt_details.get("cached_tokens"),
                 },
                 "cost_usd": float(usage.get("cost") or 0.0),
                 "declared_version": body.get("model"),
@@ -419,6 +429,7 @@ def build_record(
         "answer_text": result["answer_text"],
         "answer_chars": len(result["answer_text"]),
         "answer_sha256": hashlib.sha256(result["answer_text"].encode()).hexdigest()[:16],
+        "reasoning_text": result.get("reasoning_text"),
         "outcome": result["outcome"].value,
         "error_type": result["error_type"],
         "http_status": result["http_status"],
