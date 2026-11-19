@@ -1,0 +1,10 @@
+{
+  "days": 6,
+  "records": 2683,
+  "calls": 2683,
+  "last_day": "2026-11-19",
+  "providers": [
+    "gemini",
+    "openrouter"
+  ]
+}

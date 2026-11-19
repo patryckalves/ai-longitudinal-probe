@@ -4,6 +4,8 @@
 
 [![Python: 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Declaração de IA](https://img.shields.io/badge/Declara%C3%A7%C3%A3o%20de%20IA-COPE%20%26%20CNPq%202.664-green.svg)](AI_ASSISTANCE.md)
 
+[![CI](https://github.com/patryckalves/ai-longitudinal-probe/actions/workflows/ci.yml/badge.svg)](https://github.com/patryckalves/ai-longitudinal-probe/actions/workflows/ci.yml) [![Coleta diária](https://github.com/patryckalves/ai-longitudinal-probe/actions/workflows/collect.yml/badge.svg)](https://github.com/patryckalves/ai-longitudinal-probe/actions/workflows/collect.yml) [![Dias coletados](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpatryckalves%2Fai-longitudinal-probe%2Fmain%2Fmanifests%2Fsummary.json&query=%24.days&label=dias%20coletados&color=blue)](manifests/summary.json) [![Requests](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpatryckalves%2Fai-longitudinal-probe%2Fmain%2Fmanifests%2Fsummary.json&query=%24.calls&label=requests&color=blue)](manifests/summary.json)
+
 Uma bateria fixa de perguntas em português, disparada todo dia contra um roster fixo de modelos, com cinco
 respostas por célula. O que sai é um arquivo append-only em que cada linha carrega a resposta literal e a
 proveniência daquela chamada: modelo servido, rota, parâmetros, tokens, custo e latência.
@@ -124,7 +126,7 @@ uv run ruff check scripts tests && uv run pytest -q
 
 ## GitHub Actions
 
-`collect.yml` roda no cron das 05:17 BRT em matriz paralela por provedor (`openrouter` com `secrets.OPENROUTER_API_KEY`, `gemini` com `secrets.GEMINI_API_KEY` e `maritaca` com `secrets.MARITACA_API_KEY` rodando `S5-nano`), valida cada artefato com `validate.py` e publica os `.jsonl` brutos no Cloudflare R2 (via `secrets.BUCKET_API_KEY`, `secrets.BUCKET_ACCOUNT_ID` e `vars.BUCKET_NAME`), comitando os manifestos (com `file_sha256`) em `manifests/`. `ci.yml` roda lint e testes em push e PR.
+`collect.yml` roda em matriz paralela por provedor (`openrouter` com `secrets.OPENROUTER_API_KEY`, `gemini` com `secrets.GEMINI_API_KEY` e `maritaca` com `secrets.MARITACA_API_KEY` rodando `S5-nano`), é idempotente por manifesto (pula provedor que já fechou o dia, salvo `force: true`), valida cada artefato com `validate.py`, publica os `.jsonl` brutos no Cloudflare R2 (via `secrets.BUCKET_API_KEY`, `secrets.BUCKET_ACCOUNT_ID` e `vars.BUCKET_NAME`) e comita os manifestos + `manifests/summary.json`. O agendamento primário com jitter noturno (`00:00–03:59 BRT`) vive em `scheduler/` (Cloudflare Worker + Workflow disparando `workflow_dispatch`), mantendo o `schedule` do GitHub (`17 8 * * *` UTC) como fallback. `ci.yml` roda lint e testes em push e PR.
 
 Repositório público sem atividade por 60 dias tem o agendamento desativado. O commit diário do manifesto
 é o que mantém o cron vivo.

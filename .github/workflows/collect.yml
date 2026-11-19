@@ -4,6 +4,22 @@ on:
   schedule:
     - cron: "17 8 * * *"
   workflow_dispatch:
+    inputs:
+      provider:
+        description: "Provedor específico (all, openrouter, gemini, maritaca)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - openrouter
+          - gemini
+          - maritaca
+      force:
+        description: "Forçar re-coleta mesmo se o manifesto do dia já existir"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: collect
@@ -39,15 +55,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check provider gate
+        id: gate
+        run: |
+          DAY=$(date -u -d '-3 hours' +%F)
+          PROVIDER="${{ matrix.name }}"
+          SELECTED="${{ inputs.provider || 'all' }}"
+          FORCE="${{ inputs.force || false }}"
+          MANIFEST="manifests/${PROVIDER}/${DAY}.json"
+
+          if [ "${SELECTED}" != "all" ] && [ "${SELECTED}" != "${PROVIDER}" ]; then
+            echo "::notice::skipping ${PROVIDER} — filtered out (selected=${SELECTED})"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${FORCE}" != "true" ] && [ -f "${MANIFEST}" ]; then
+            echo "::notice::skipping ${PROVIDER} — ${MANIFEST} already exists"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
       - uses: astral-sh/setup-uv@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
           enable-cache: true
 
       - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
         run: uv sync --locked --no-dev
 
       - name: Collect (5 draws per cell)
+        if: steps.gate.outputs.run == 'true'
         env:
           PROBE_API_KEY: ${{ secrets[matrix.api_key_secret] }}
           PROBE_BASE_URL: ${{ matrix.base_url }}
@@ -63,7 +105,7 @@ jobs:
           uv run python3 scripts/collect.py
 
       - name: Validate the day's artifact
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         run: |
           DAY=$(date -u -d '-3 hours' +%F)
           OUT="data/${DAY}-${{ matrix.name }}.jsonl"
@@ -73,7 +115,7 @@ jobs:
           fi
 
       - name: Archive job artifacts
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: probe-${{ github.run_id }}-${{ matrix.name }}
@@ -120,10 +162,13 @@ jobs:
 
       - name: Commit manifests
         run: |
-          if [ -d _collected/manifests ]; then
-            mkdir -p manifests
-            cp -R _collected/manifests/* manifests/
+          if [ ! -d _collected/manifests ]; then
+            echo "::notice::no manifests collected — skipping commit"
+            exit 0
           fi
+          mkdir -p manifests
+          cp -R _collected/manifests/* manifests/
+          python3 scripts/summarize.py
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifests

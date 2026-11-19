@@ -7,7 +7,9 @@ Coletor diário do *Observatório Longitudinal de Modelos de IA em Produção* (
 - `scripts/schema.py` — Contratos Pydantic (`Record`, `Manifest`, `Question`) e `load_questions`.
 - `scripts/collect.py` — Coletor (`draw -> question -> model`, sem `temperature`, `MAX_TOKENS = 3000`).
 - `scripts/validate.py` — Portão de qualidade pós-coleta (schema, cobertura, canários, cache).
-- `.github/workflows/collect.yml` — Matriz paralela (`openrouter`, `gemini`, `maritaca`) + upload no R2 + commit em `manifests/` via `github-actions[bot]`.
+- `scripts/summarize.py` — Sumarizador stdlib que gera `manifests/summary.json` para os badges do repositório.
+- `scheduler/` — Cloudflare Worker + Workflow (`wrangler.toml` + `worker.js`) que dispara `collect.yml` com jitter na janela noturna (`00:00–03:59 BRT`).
+- `.github/workflows/collect.yml` — Matriz paralela (`openrouter`, `gemini`, `maritaca`) idempotente por manifesto + upload no R2 + commit em `manifests/` via `github-actions[bot]`.
 - `.github/workflows/ci.yml` — Lint (`ruff`) e testes (`pytest`) em Python `3.12`.
 
 ## Regras operacionais

@@ -1,0 +1,18 @@
+name = "ai-longitudinal-scheduler"
+main = "worker.js"
+compatibility_date = "2026-11-19"
+
+[vars]
+GITHUB_REPO = "patryckalves/ai-longitudinal-probe"
+WORKFLOW_FILE = "collect.yml"
+WORKFLOW_REF = "main"
+JITTER_MAX_SECONDS = 14400
+
+[triggers]
+# 00:00 BRT (03:00 UTC), once per day.
+crons = ["0 3 * * *"]
+
+[[workflows]]
+name = "collect-jitter"
+binding = "COLLECT_WORKFLOW"
+class_name = "CollectWorkflow"
