@@ -1,10 +1,11 @@
 {
   "days": 6,
-  "records": 2683,
-  "calls": 2683,
+  "records": 2778,
+  "calls": 2778,
   "last_day": "2026-11-19",
   "providers": [
     "gemini",
+    "maritaca",
     "openrouter"
   ]
 }
