@@ -1,0 +1,29 @@
+{
+  "run_id": "2026-11-19",
+  "instrument_version": "v1.0.0",
+  "generated_at": "2026-11-19T18:36:52.216545+00:00",
+  "roster": [
+    "baidu/ernie-5.5-flash-preview:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "cohere/north-mini-code:free",
+    "dots-studio/dots-3-note-preview:free"
+  ],
+  "draws": 5,
+  "questions": 19,
+  "canaries_included": true,
+  "records_this_run": 380,
+  "records_today": 380,
+  "target_today": 380,
+  "coverage": 1.0,
+  "outcomes_this_run": {
+    "answered": 378,
+    "truncated": 2
+  },
+  "calls": 380,
+  "duration_s": 4450,
+  "actions_minutes": 74.2,
+  "bytes_written": 847634,
+  "file_sha256": "a37557202c7541cf60c7baeaa9af316c320ff3a51552b6c2fda291bfcdd0be08",
+  "cost_usd": 0.0,
+  "file": "2026-11-19.json"
+}
