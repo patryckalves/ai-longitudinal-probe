@@ -50,7 +50,7 @@ jobs:
             api_key_secret: GEMINI_API_KEY
           - name: maritaca
             base_url: "https://chat.maritaca.ai/api"
-            models: "S5-nano"
+            models: "S5-nano,S5"
             api_key_secret: MARITACA_API_KEY
     steps:
       - uses: actions/checkout@v4
