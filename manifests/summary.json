@@ -1,8 +1,8 @@
 {
-  "days": 10,
-  "records": 5248,
-  "calls": 5248,
-  "last_day": "2026-11-23",
+  "days": 11,
+  "records": 5913,
+  "calls": 5913,
+  "last_day": "2026-11-24",
   "providers": [
     "gemini",
     "maritaca",
