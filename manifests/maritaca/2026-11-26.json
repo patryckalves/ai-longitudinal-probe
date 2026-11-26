@@ -1,0 +1,27 @@
+{
+  "run_id": "2026-11-26",
+  "instrument_version": "v1.0.0",
+  "generated_at": "2026-11-26T05:13:38.314881+00:00",
+  "roster": [
+    "S5-nano",
+    "S5"
+  ],
+  "draws": 5,
+  "questions": 19,
+  "canaries_included": true,
+  "records_this_run": 190,
+  "records_today": 190,
+  "target_today": 190,
+  "coverage": 1.0,
+  "outcomes_this_run": {
+    "answered": 176,
+    "truncated": 14
+  },
+  "calls": 190,
+  "duration_s": 1411,
+  "actions_minutes": 23.5,
+  "bytes_written": 474994,
+  "file_sha256": "a898370fc103a9a058b9c4908597aa2ad8d62e285c30c8643d91e952c3e5b3d4",
+  "cost_usd": 0.0,
+  "file": "2026-11-26.json"
+}

@@ -1,0 +1,25 @@
+{
+  "run_id": "2026-11-26",
+  "instrument_version": "v1.0.0",
+  "generated_at": "2026-11-26T04:57:13.686806+00:00",
+  "roster": [
+    "gemini-3.5-flash-lite"
+  ],
+  "draws": 5,
+  "questions": 19,
+  "canaries_included": true,
+  "records_this_run": 95,
+  "records_today": 95,
+  "target_today": 95,
+  "coverage": 1.0,
+  "outcomes_this_run": {
+    "answered": 95
+  },
+  "calls": 95,
+  "duration_s": 424,
+  "actions_minutes": 7.1,
+  "bytes_written": 170457,
+  "file_sha256": "1dc4e2f82933cc390c003342bcf5b645a758e426fac123dd60eeb36b30efca48",
+  "cost_usd": 0.0,
+  "file": "2026-11-26.json"
+}
